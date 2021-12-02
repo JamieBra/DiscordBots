@@ -1,6 +1,6 @@
 from filament.utils import slash_command
 from getpass import getpass
-from hikari import ButtonStyle, InteractionCreateEvent, InteractionType
+from hikari import ButtonStyle, InteractionCreateEvent, InteractionType, UNDEFINED
 from inspect import signature
 from lightbulb import add_checks, BotApp, CommandErrorEvent, option
 from os import name
@@ -46,6 +46,9 @@ class SlashBot(BotApp):
         return decorated
 
     def button(self, url_or_custom_id, label, callback=None):
+        if not url_or_custom_id:
+            return UNDEFINED
+            
         style = ButtonStyle.LINK
         if callback:
             self.callbacks[url_or_custom_id] = callback
