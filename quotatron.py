@@ -11,7 +11,7 @@ async def find(context, success, failure, *members):
     link = None
     a = datetime.now(timezone.utc)
     
-    while True:
+    for _ in range(5):
         content = ''
         messages = set()
         for member in members:
@@ -33,18 +33,16 @@ async def find(context, success, failure, *members):
                     break
         if len(content) <= 2000:
             return content or failure, link
+    return 'All attempts at finding quotes exceeded the maximum length.', None
 
 @bot.slash('Randomly quotes members in this channel.')
 async def convo(context, *members: ('Quote whom?', Member), count: ('How many?', int) = 5):
-    content, _ = await find(context, '{username}: {content}\n', 'No messages found.', *sample(members, len(members)) or [None] * count)
+    content, _ = await find(context, '{username}: {content}\n', 'No messages found.', *sample(members, len(members)) or [None] * min(count, 100))
     await context.respond(content)
 
 @bot.slash('Randomly quotes a member in this channel.')
 async def quote(context, member: ('Quote whom?', Member) = None):
     content, link = await find(context, '"{content}" -{username}, {date}', 'No message found.', member)
-    if link:
-        await context.respond(content, component=bot.button(link, 'Original'))
-    else:
-        await context.respond(content)
+    await context.respond(content, component=bot.button(link, 'Original'))
 
 bot.run()
