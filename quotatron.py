@@ -35,13 +35,16 @@ async def find(context, success, failure, *members):
             return content or failure, link
 
 @bot.slash('Randomly quotes members in this channel.')
-async def convo(context, *members: ('Quote whom?', Member)):
-    content, _ = await find(context, '{username}: {content}\n', 'No messages found.', *sample(members, len(members)) or [None] * 5)
-    return content
+async def convo(context, *members: ('Quote whom?', Member), count: ('How many?', int) = 5):
+    content, _ = await find(context, '{username}: {content}\n', 'No messages found.', *sample(members, len(members)) or [None] * count)
+    await context.respond(content)
 
 @bot.slash('Randomly quotes a member in this channel.')
 async def quote(context, member: ('Quote whom?', Member) = None):
     content, link = await find(context, '"{content}" -{username}, {date}', 'No message found.', member)
-    return content, dict(component=bot.button(link, 'Original')) if link else {}
+    if link:
+        await context.respond(content, component=bot.button(link, 'Original'))
+    else:
+        await context.respond(content)
 
 bot.run()
