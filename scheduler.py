@@ -17,6 +17,6 @@ async def schedule(context, channel: ('Where?', TextableGuildChannel), timestr: 
     channel = context.get_guild().get_channel(channel)
     time = parse(timestr)
     task = create_task(coro(context, channel, time))
-    return f'Scheduled `{content}` to be sent in {channel.mention} at __{time}__.', dict(component=bot.button(task.get_name(), 'Cancel', task.cancel))
+    await context.respond(f'Scheduled `{content}` to be sent in {channel.mention} at __{time}__.', component=bot.button(task.get_name(), 'Cancel', task.cancel))
 
 bot.run()
