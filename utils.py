@@ -1,8 +1,8 @@
-from filament.utils import slash_command
 from getpass import getpass
 from hikari import ButtonStyle, InteractionCreateEvent, InteractionType, UNDEFINED
 from inspect import signature
 from lightbulb import add_checks, BotApp, CommandErrorEvent, option
+from lightbulb.ext.filament.utils import slash_command
 from os import name
 
 class SlashBot(BotApp):
@@ -15,7 +15,7 @@ class SlashBot(BotApp):
         async def on_error(event):
             await event.context.respond(event.exception.__cause__)
             raise event.exception
-            
+
         @self.listen(InteractionCreateEvent)
         async def on_interaction(event):
             if event.interaction.type == InteractionType.MESSAGE_COMPONENT:
@@ -48,13 +48,13 @@ class SlashBot(BotApp):
     def button(self, url_or_custom_id, label, callback=None):
         if not url_or_custom_id:
             return UNDEFINED
-            
+
         style = ButtonStyle.LINK
         if callback:
             self.callbacks[url_or_custom_id] = callback
             style = ButtonStyle.DANGER
         return self.rest.build_action_row().add_button(style, url_or_custom_id).set_label(label).add_to_container()
-    
+
     def run(self):
         if name == 'posix':
             from uvloop import install
