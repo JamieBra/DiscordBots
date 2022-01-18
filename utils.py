@@ -3,7 +3,6 @@ from hikari import ButtonStyle, InteractionCreateEvent, InteractionType, UNDEFIN
 from inspect import signature
 from lightbulb import add_checks, BotApp, CommandErrorEvent, option
 from lightbulb.ext.filament.utils import slash_command
-from os import name
 
 class SlashBot(BotApp):
     def __init__(self, *cmd_checks, **kwargs):
@@ -27,7 +26,7 @@ class SlashBot(BotApp):
         def decorated(callable):
             @self.command
             @add_checks(*self.cmd_checks)
-            @slash_command(callable.__name__, description, auto_defer=True)
+            @slash_command(callable.__name__.replace('_', ' '), description, auto_defer=True)
             async def func(context):
                 kwargs = dict(zip(keyword_only, map(context.raw_options.pop, keyword_only)))
                 await callable(context, *filter(None, context.raw_options.values()), **kwargs)
@@ -56,7 +55,9 @@ class SlashBot(BotApp):
         return self.rest.build_action_row().add_button(style, url_or_custom_id).set_label(label).add_to_container()
 
     def run(self):
-        if name == 'posix':
+        try:
             from uvloop import install
             install()
+        except:
+            print('uvloop is recommended for best performance.')
         super().run()
