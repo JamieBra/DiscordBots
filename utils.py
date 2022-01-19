@@ -12,7 +12,7 @@ class SlashBot(BotApp):
 
         @self.listen(CommandErrorEvent)
         async def on_error(event):
-            await event.context.respond(event.exception.__cause__)
+            await event.context.respond(event.exception)
             raise event.exception
 
         @self.listen(InteractionCreateEvent)
@@ -22,11 +22,11 @@ class SlashBot(BotApp):
                     callback()
                 await event.interaction.message.delete()
 
-    def slash(self, description):
+    def slash(self, description, *cmd_checks):
         def decorated(callable):
             @self.command
-            @add_checks(*self.cmd_checks)
-            @slash_command(callable.__name__.replace('_', ' '), description, auto_defer=True)
+            @add_checks(*cmd_checks, *self.cmd_checks)
+            @slash_command(callable.__name__.replace('_', '-'), description, auto_defer=True)
             async def func(context):
                 kwargs = dict(zip(keyword_only, map(context.raw_options.pop, keyword_only)))
                 await callable(context, *filter(None, context.raw_options.values()), **kwargs)
