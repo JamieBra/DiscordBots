@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from hikari import CacheSettings, Member
+from hikari import ButtonStyle, CacheSettings, Member
 from random import choice, sample, uniform
 from utils import SlashBot
 
@@ -43,6 +43,6 @@ async def convo(context, *members: ('Quote whom?', Member), count: ('How many?',
 @bot.slash('Randomly quotes a member in this channel.')
 async def quote(context, member: ('Quote whom?', Member) = None):
     content, link = await find(context, '"{content}" -{username}, {date}', 'No message found.', member)
-    await context.respond(content, component=bot.button(link, 'Original'))
+    await context.respond(content, component=bot.button(link, 'Original', ButtonStyle.LINK, False))
 
 bot.run()
