@@ -5,8 +5,8 @@ from lightbulb import add_checks, BotApp, CommandErrorEvent, option
 from lightbulb.ext.filament.utils import slash_command
 
 class SlashBot(BotApp):
-    def __init__(self, **kwargs):
-        super().__init__(getpass(), **kwargs)
+    def __init__(self, token=None, **kwargs):
+        super().__init__(token or getpass(), **kwargs)
         self.callbacks = {}
 
         @self.listen(CommandErrorEvent)
@@ -18,7 +18,7 @@ class SlashBot(BotApp):
         async def on_interaction(event):
             if event.interaction.type == InteractionType.MESSAGE_COMPONENT:
                 if callback := self.callbacks.get(event.interaction.custom_id):
-                    await callback(interaction)
+                    await callback(event.interaction)
 
     def slash(self, description, *cmd_checks):
         def decorated(callable):
@@ -42,12 +42,14 @@ class SlashBot(BotApp):
 
         return decorated
 
-    def button(self, url_or_custom_id, label, style, callback=None):
-        if not url_or_custom_id:
-            return UNDEFINED
-        if callback:
-            self.callbacks[url_or_custom_id] = callback
-        return self.rest.build_action_row().add_button(style, url_or_custom_id).set_label(label).add_to_container()
+    def button(self, url_or_custom_id, label, style, decorator=True):
+        def decorated(callback):
+            if not url_or_custom_id:
+                return UNDEFINED
+            if callback:
+                self.callbacks[url_or_custom_id] = callback
+            return self.rest.build_action_row().add_button(style, url_or_custom_id).set_label(label).add_to_container()
+        return decorated if decorator else decorated(None)
 
     def run(self):
         try:
@@ -55,4 +57,4 @@ class SlashBot(BotApp):
             install()
         except:
             print('uvloop is recommended for best performance on Unix systems.')
-        super().run()
+        super().run(check_for_updates=False)
