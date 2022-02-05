@@ -10,7 +10,7 @@ async def find(context, success, failure, *members):
     guild = context.get_guild()
     link = None
     a = datetime.now(timezone.utc)
-    
+
     for _ in range(5):
         content = ''
         messages = set()
@@ -43,6 +43,6 @@ async def convo(context, *members: ('Quote whom?', Member), count: ('How many?',
 @bot.slash('Randomly quotes a member in this channel.')
 async def quote(context, member: ('Quote whom?', Member) = None):
     content, link = await find(context, '"{content}" -{username}, {date}', 'No message found.', member)
-    await context.respond(content, component=bot.button(link, 'Original', ButtonStyle.LINK, False))
+    await context.respond(content, component=bot.button('Original', ButtonStyle.LINK, link))
 
 bot.run()
