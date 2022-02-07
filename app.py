@@ -1,5 +1,5 @@
 from getpass import getpass
-from hikari import ButtonStyle, InteractionCreateEvent, InteractionType, UNDEFINED
+from hikari import ButtonStyle, InteractionCreateEvent, InteractionType
 from inspect import signature
 from lightbulb import add_checks, BotApp, option
 from lightbulb.ext.filament.utils import slash_command
@@ -39,8 +39,6 @@ class SlashBot(BotApp):
         return decorate
 
     def component(self, add_function, id=str(uuid4())):
-        if not id:
-            return UNDEFINED
         def decorate(callback):
             if callback:
                 self.callbacks[id] = callback
