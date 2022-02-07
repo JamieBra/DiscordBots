@@ -1,9 +1,9 @@
+from app import SlashBot
 from datetime import datetime
 from dateutil.parser import parse
 from hikari import ButtonStyle, TextableGuildChannel
 from lightbulb import owner_only
 from lightbulb.ext.tasks import load, task
-from utils import SlashBot
 
 bot = SlashBot()
 
