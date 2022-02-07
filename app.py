@@ -38,13 +38,26 @@ class SlashBot(BotApp):
 
         return decorate
 
-    def button(self, label, style, url_or_custom_id=str(uuid4())):
-        if not url_or_custom_id:
+    def component(self, add_function, id=str(uuid4())):
+        if not id:
             return UNDEFINED
         def decorate(callback):
-            self.callbacks[url_or_custom_id] = callback
-            return self.rest.build_action_row().add_button(style, url_or_custom_id).set_label(label).add_to_container()
+            if callback:
+                self.callbacks[id] = callback
+            return add_function(self.rest.build_action_row(), id).add_to_container()
+        return decorate
+
+    def button(self, label, style, *args):
+        decorate = self.component(lambda builder, id: builder.add_button(style, id).set_label(label), *args)
         return decorate(None) if style == ButtonStyle.LINK else decorate
+
+    def menu(self, *labels_and_values):
+        def add_options(builder, id):
+            builder = builder.add_select_menu(id)
+            for label, value in labels_and_values:
+                builder.add_option(label, value).add_to_menu()
+            return builder
+        return self.component(add_options)
 
     def run(self):
         try:
