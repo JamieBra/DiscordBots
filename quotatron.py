@@ -1,60 +1,65 @@
 from os import environ
-from async_timeout import timeout
-from asyncio import TimeoutError
+from typing import Optional
 from datetime import datetime, timedelta, timezone
-from crescent import Bot, Context, command, option
-from hikari import ButtonStyle, Member, UNDEFINED, Message, TextableChannel, User
+from crescent import Bot, ClassCommandProto, Context, command, option
+from hikari import ButtonStyle, Member, TextableChannel, User
 from random import choice, shuffle, uniform
 from uvloop import install
 
 
-async def find(ctx: Context, success: str, failure: str, *users: User):
-    def predicate(m: Message):
-        return m.content and not (m.mentions_everyone or m.role_mention_ids or m.user_mentions_ids) and m.content not in messages and '://' not in m.content
-
-    channel: TextableChannel = ctx.channel
-    attrs = dict(attachments=[], embeds=[], stickers=[])
-    link = None
-    a = datetime.now(timezone.utc)
-
-    try:
-        async with timeout(900) as to:
-            content = ''
-            messages = set()
-            for i, user in enumerate(users):
-                predicates = [predicate]
-                if isinstance(user, Member):
-                    b = max(channel.created_at, user.joined_at)
-                    attrs['author'] = user.user
-                else:
-                    b = channel.created_at
-                    predicates.append(
-                        lambda m: not m.author.is_bot and m.author.discriminator != '0000')
-
-                until = timedelta(
-                    seconds=(to.deadline - to._loop.time()) / (len(users) - i)) + datetime.now()
-                while datetime.now() < until:
-                    if history := await channel.fetch_history(around=uniform(a, b)).limit(101).filter(*predicates, **attrs):
-                        m = choice(history)
-                        link = m.make_link(ctx.guild)
-                        messages.add(m)
-                        content += success.format(username=m.author.username, content=m.content.replace(
-                            '\n', ' \\ '), date=m.timestamp.date())
-                        break
-            if len(content) <= 2000:
-                return content or failure, link
-    except TimeoutError:
-        return 'All attempts at finding quotes exceeded the maximum length.', None
+def utcnow():
+    return datetime.now(timezone.utc)
 
 
-def add_users(callback):
+async def find(ctx: Context, success: str, *users: Optional[User]):
+    if isinstance(ctx.channel, TextableChannel):
+        a = utcnow()
+        content = ''
+        count = len(users)
+        deadline = a + timedelta(minutes=15)
+        link = None
+        messages = set()
+
+        for i, user in enumerate(users):
+            attrs = {}
+            predicates = []
+
+            if isinstance(user, Member):
+                b = max(ctx.channel.created_at, user.joined_at)
+                attrs['author'] = user.user
+            else:
+                b = ctx.channel.created_at
+                predicates.append(('author.is_bot', False))
+
+            now = utcnow()
+            until = (deadline - now) / (count - i) + now
+            while utcnow() < until:
+                if history := await ctx.channel.fetch_history(around=uniform(a, b)).limit(101).filter(
+                    lambda m: m.content is not None and m.author.discriminator != '0000' and m not in messages and '://' not in m.content,
+                    *predicates,
+                    mentions_everyone=False,
+                    role_mention_ids=[],
+                    user_mentions_ids=[],
+                    **attrs
+                ):
+                    m = choice(history)
+                    link = m.make_link(ctx.guild)
+                    content += success.format(username=m.author.username, content=m.content.replace(
+                        '\n', ' / '), date=m.timestamp.date()) + '\n'
+                    messages.add(m)
+                    break
+        if content and len(content) <= 2000:
+            return content, link
+    return 'No messages found.', None
+
+
+def add_users(callback: type[ClassCommandProto]):
     for i in range(1, 25):
         setattr(callback, f'user{i}', option(User, default=None))
     return callback
 
 
-bot = Bot(environ.get('DISCORD'), default_guild=581657201123262491,
-          command_hooks=[Context.defer])
+bot = Bot(environ.get('DISCORD'), command_hooks=[Context.defer])
 
 
 @ bot.include
@@ -66,21 +71,19 @@ class Convo:
     async def callback(self, ctx: Context):
         users = [v for k, v in ctx.options.items() if k != 'count']
         shuffle(users)
-        content, _ = await find(ctx, '{username}: {content}\n', 'No messages found.', *users or [None] * min(self.count, 100))
+        content, _ = await find(ctx, '{username}: {content}', *users or [None] * min(self.count, 25))
         await ctx.respond(content)
 
 
 @ bot.include
 @ command
-async def quote(ctx: Context, user: User = None):
-    content, link = await find(ctx, '"{content}" -{username}, {date}', 'No message found.', user)
+async def quote(ctx: Context, user: Optional[User] = None):
+    content, link = await find(ctx, '"{content}" -{username}, {date}', user)
 
     if link:
-        component = bot.rest.build_message_action_row().add_button(
-            ButtonStyle.LINK, link).set_label('Original').add_to_container()
+        await ctx.respond(content, component=bot.rest.build_message_action_row().add_button(ButtonStyle.LINK, link).set_label('Original').add_to_container())
     else:
-        component = UNDEFINED
-    await ctx.respond(content, component=component)
+        await ctx.respond(content)
 
 install()
 bot.run()
