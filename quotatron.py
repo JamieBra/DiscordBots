@@ -14,9 +14,10 @@ def utcnow():
 async def find(ctx: Context, success: str, *users: Optional[User]):
     if isinstance(ctx.channel, TextableChannel):
         a = utcnow()
-        content = ''
-        count = len(users)
         deadline = a + timedelta(minutes=15)
+        count = len(users)
+
+        content = ''
         link = None
         messages = set()
 
@@ -34,7 +35,7 @@ async def find(ctx: Context, success: str, *users: Optional[User]):
             now = utcnow()
             until = (deadline - now) / (count - i) + now
             while utcnow() < until:
-                if history := await ctx.channel.fetch_history(around=uniform(a, b)).limit(101).filter(
+                if history := await ctx.channel.fetch_history(around=uniform(a, b)).limit(101).filter(  # type: ignore
                     lambda m: m.content is not None and m.author.discriminator != '0000' and m not in messages and '://' not in m.content,
                     *predicates,
                     mentions_everyone=False,
@@ -44,13 +45,16 @@ async def find(ctx: Context, success: str, *users: Optional[User]):
                 ):
                     m = choice(history)
                     link = m.make_link(ctx.guild)
-                    content += success.format(username=m.author.username, content=m.content.replace(
-                        '\n', ' / '), date=m.timestamp.date()) + '\n'
+                    content += success.format(username=m.author.username, content=m.content.replace(  # type: ignore
+                        '\n', ' / '), date=m.timestamp.date())
                     messages.add(m)
                     break
         if content and len(content) <= 2000:
             return content, link
     return 'No messages found.', None
+
+
+bot = Bot(environ.get('DISCORD', ''), command_hooks=[Context.defer])
 
 
 def add_users(callback: type[ClassCommandProto]):
@@ -59,24 +63,21 @@ def add_users(callback: type[ClassCommandProto]):
     return callback
 
 
-bot = Bot(environ.get('DISCORD'), command_hooks=[Context.defer])
-
-
-@ bot.include
-@ command(name='convo')
-@ add_users
+@bot.include
+@command(name='convo')
+@add_users
 class Convo:
-    count = option(int, default=5)
+    count = option(int, default=5, max_value=25)
 
     async def callback(self, ctx: Context):
         users = [v for k, v in ctx.options.items() if k != 'count']
         shuffle(users)
-        content, _ = await find(ctx, '{username}: {content}', *users or [None] * min(self.count, 25))
+        content, _ = await find(ctx, '{username}: {content}\n', *users or [None] * self.count)
         await ctx.respond(content)
 
 
-@ bot.include
-@ command
+@bot.include
+@command
 async def quote(ctx: Context, user: Optional[User] = None):
     content, link = await find(ctx, '"{content}" -{username}, {date}', user)
 
