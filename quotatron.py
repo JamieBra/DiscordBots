@@ -1,9 +1,11 @@
-from os import environ
-from typing import Optional
 from datetime import datetime, timedelta, timezone
+from os import environ
+from random import choice, shuffle, uniform
+from re import compile
+from typing import Optional
+
 from crescent import Bot, ClassCommandProto, Context, command, option
 from hikari import ButtonStyle, Member, TextableChannel, User
-from random import choice, shuffle, uniform
 from uvloop import install
 
 
@@ -19,7 +21,8 @@ async def find(ctx: Context, success: str, *users: Optional[User]):
 
         content = ''
         link = None
-        messages = set()
+
+        messages.clear()
 
         for i, user in enumerate(users):
             attrs = {}
@@ -36,7 +39,10 @@ async def find(ctx: Context, success: str, *users: Optional[User]):
             until = (deadline - now) / (count - i) + now
             while utcnow() < until:
                 if history := await ctx.channel.fetch_history(around=uniform(a, b)).limit(101).filter(  # type: ignore
-                    lambda m: m.content is not None and m.author.discriminator != '0000' and m not in messages and '://' not in m.content,
+                    lambda m: not (
+                        m.content is None or m.author.discriminator == '0000' or m in messages or pattern.search(
+                            m.content)
+                    ),
                     *predicates,
                     mentions_everyone=False,
                     role_mention_ids=[],
@@ -45,8 +51,11 @@ async def find(ctx: Context, success: str, *users: Optional[User]):
                 ):
                     m = choice(history)
                     link = m.make_link(ctx.guild)
-                    content += success.format(username=m.author.username, content=m.content.replace(  # type: ignore
-                        '\n', ' / '), date=m.timestamp.date())
+                    content += success.format(
+                        username=m.author.username,
+                        content=m.content,
+                        date=m.timestamp.date()
+                    )
                     messages.add(m)
                     break
         if content and len(content) <= 2000:
@@ -55,6 +64,8 @@ async def find(ctx: Context, success: str, *users: Optional[User]):
 
 
 bot = Bot(environ.get('DISCORD', ''), command_hooks=[Context.defer])
+pattern = compile(r'\n|://')
+messages = set()
 
 
 def add_users(callback: type[ClassCommandProto]):
@@ -82,9 +93,13 @@ async def quote(ctx: Context, user: Optional[User] = None):
     content, link = await find(ctx, '"{content}" -{username}, {date}', user)
 
     if link:
-        await ctx.respond(content, component=bot.rest.build_message_action_row().add_button(ButtonStyle.LINK, link).set_label('Original').add_to_container())
+        await ctx.respond(
+            content,
+            component=bot.rest.build_message_action_row().add_button(ButtonStyle.LINK, link).set_label('Original').add_to_container()
+        )
     else:
         await ctx.respond(content)
+
 
 install()
 bot.run()
