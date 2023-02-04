@@ -1,11 +1,15 @@
+from collections import Counter
 from datetime import datetime, timedelta, timezone
+from getpass import getpass
 from os import environ
 from random import choice, shuffle, uniform
 from re import compile
+from sys import maxsize
 from typing import Optional
 
-from crescent import Bot, ClassCommandProto, Context, command, option
-from hikari import ButtonStyle, Member, TextableChannel, User
+from crescent import ClassCommandProto, Client, Context, command, option
+from hikari import ButtonStyle, GatewayBot, Message, TextableChannel, User
+from hikari.impl import CacheSettings
 from uvloop import install
 
 
@@ -14,58 +18,47 @@ def utcnow():
 
 
 async def find(ctx: Context, success: str, *users: Optional[User]):
-    if isinstance(ctx.channel, TextableChannel):
-        a = utcnow()
-        deadline = a + timedelta(minutes=15)
-        count = len(users)
+    def author(message: Message):
+        return message.author if specific_users else None
 
+    if isinstance(ctx.channel, TextableChannel):
+        now = utcnow()
+        deadline = now + timedelta(minutes=15)
         content = ''
         link = None
-
+        counts = Counter(users)
+        specific_users = None not in counts
+        remaining = counts.total()
         messages.clear()
 
-        for i, user in enumerate(users):
-            attrs = {}
-            predicates = []
+        while remaining and utcnow() < deadline:
+            if history := await ctx.channel.fetch_history(around=uniform(ctx.channel.created_at, now)).limit(101).filter(  # type: ignore
+                lambda m: not (m.content is None or m.author.discriminator == '0000' or m in messages or pattern.search(m.content)) and author(m) in counts,
+                ('author.is_bot', specific_users),
+                mentions_everyone=False,
+                role_mention_ids=[],
+                user_mentions_ids=[]
+            ):
+                message = choice(history)
+                link = message.make_link(ctx.guild)
+                content += success.format(
+                    username=message.author.username,
+                    content=message.content,
+                    date=message.timestamp.date()
+                )
+                messages.add(message)
 
-            if isinstance(user, Member):
-                b = max(ctx.channel.created_at, user.joined_at)
-                attrs['author'] = user.user
-            else:
-                b = ctx.channel.created_at
-                predicates.append(('author.is_bot', False))
-
-            now = utcnow()
-            until = (deadline - now) / (count - i) + now
-            while utcnow() < until:
-                if history := await ctx.channel.fetch_history(around=uniform(a, b)).limit(101).filter(  # type: ignore
-                    lambda m: not (
-                        m.content is None or m.author.discriminator == '0000' or m in messages or pattern.search(
-                            m.content)
-                    ),
-                    *predicates,
-                    mentions_everyone=False,
-                    role_mention_ids=[],
-                    user_mentions_ids=[],
-                    **attrs
-                ):
-                    m = choice(history)
-                    link = m.make_link(ctx.guild)
-                    content += success.format(
-                        username=m.author.username,
-                        content=m.content,
-                        date=m.timestamp.date()
-                    )
-                    messages.add(m)
-                    break
+                counts[author(message)] -= 1
+                remaining -= 1
         if content and len(content) <= 2000:
             return content, link
     return 'No messages found.', None
 
 
-bot = Bot(environ.get('DISCORD', ''), command_hooks=[Context.defer])
+bot = GatewayBot(environ.get('DISCORD') or getpass(), cache_settings=CacheSettings(max_messages=maxsize))
+client = Client(bot, default_guild=581657201123262491, command_hooks=[Context.defer])
 pattern = compile(r'\n|://')
-messages = set()
+messages: set[Message] = set()
 
 
 def add_users(callback: type[ClassCommandProto]):
@@ -74,7 +67,7 @@ def add_users(callback: type[ClassCommandProto]):
     return callback
 
 
-@bot.include
+@client.include
 @command(name='convo')
 @add_users
 class Convo:
@@ -87,7 +80,7 @@ class Convo:
         await ctx.respond(content)
 
 
-@bot.include
+@client.include
 @command
 async def quote(ctx: Context, user: Optional[User] = None):
     content, link = await find(ctx, '"{content}" -{username}, {date}', user)
@@ -102,4 +95,4 @@ async def quote(ctx: Context, user: Optional[User] = None):
 
 
 install()
-bot.run()
+bot.run(check_for_updates=False)
