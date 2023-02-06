@@ -20,9 +20,9 @@ def utcnow():
 async def find(ctx: Context, success: str, *users: Optional[User]):
     def author(message: Message):
         return specific_users and message.author.id
-    
-    def predicate(m: Message):
-        return not (m.content is None or m.author.discriminator == '0000' or m in messages or pattern.search(m.content)) and author(m) in counts
+
+    def predicate(message: Message):
+        return not (message.content is None or message.author.discriminator == '0000' or message in messages or pattern.search(message.content)) and author(message) in counts
 
     if isinstance(ctx.channel, TextableChannel):
         start = utcnow()
