@@ -59,7 +59,7 @@ async def find(ctx: Context, success: str, *users: Optional[User]):
 
 
 bot = GatewayBot(environ.get('DISCORD') or getpass(), cache_settings=CacheSettings(max_messages=maxsize))
-client = Client(bot, default_guild=581657201123262491, command_hooks=[Context.defer])
+client = Client(bot, command_hooks=[Context.defer])
 pattern = compile(r'\n|://')
 
 
