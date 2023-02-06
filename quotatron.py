@@ -19,25 +19,29 @@ def utcnow():
 
 async def find(ctx: Context, success: str, *users: Optional[User]):
     def author(message: Message):
-        return message.author if specific_users else None
+        return specific_users and message.author.id
+    
+    def predicate(m: Message):
+        return not (m.content is None or m.author.discriminator == '0000' or m in messages or pattern.search(m.content)) and author(m) in counts
 
     if isinstance(ctx.channel, TextableChannel):
-        now = utcnow()
-        deadline = now + timedelta(minutes=15)
+        start = utcnow()
+        deadline = start + timedelta(minutes=15)
+
         content = ''
         link = None
-        counts = Counter(users)
-        specific_users = None not in counts
-        remaining = counts.total()
-        messages.clear()
 
-        while remaining and utcnow() < deadline:
-            if history := await ctx.channel.fetch_history(around=uniform(ctx.channel.created_at, now)).limit(101).filter(  # type: ignore
-                lambda m: not (m.content is None or m.author.discriminator == '0000' or m in messages or pattern.search(m.content)) and author(m) in counts,
-                ('author.is_bot', specific_users),
+        messages: set[Message] = set()
+        counts = Counter(user and user.id for user in users if not (user and user.is_bot))
+        specific_users = users[0]
+
+        while counts and utcnow() < deadline:
+            if history := await ctx.channel.fetch_history(around=uniform(ctx.channel.created_at, start)).limit(101).filter(  # type: ignore
+                predicate,
+                ('author.is_bot', False),
                 mentions_everyone=False,
                 role_mention_ids=[],
-                user_mentions_ids=[]
+                user_mentions_ids=[],
             ):
                 message = choice(history)
                 link = message.make_link(ctx.guild)
@@ -47,9 +51,8 @@ async def find(ctx: Context, success: str, *users: Optional[User]):
                     date=message.timestamp.date()
                 )
                 messages.add(message)
-
                 counts[author(message)] -= 1
-                remaining -= 1
+                counts = +counts
         if content and len(content) <= 2000:
             return content, link
     return 'No messages found.', None
@@ -58,7 +61,6 @@ async def find(ctx: Context, success: str, *users: Optional[User]):
 bot = GatewayBot(environ.get('DISCORD') or getpass(), cache_settings=CacheSettings(max_messages=maxsize))
 client = Client(bot, default_guild=581657201123262491, command_hooks=[Context.defer])
 pattern = compile(r'\n|://')
-messages: set[Message] = set()
 
 
 def add_users(callback: type[ClassCommandProto]):
@@ -71,7 +73,7 @@ def add_users(callback: type[ClassCommandProto]):
 @command(name='convo')
 @add_users
 class Convo:
-    count = option(int, default=5, max_value=25)
+    count = option(int, default=5, min_value=2, max_value=25)
 
     async def callback(self, ctx: Context):
         users = [v for k, v in ctx.options.items() if k != 'count']
