@@ -72,12 +72,12 @@ def parse_annotation(clazz: type[ClassCommandProto]):
 
 
 bot = GatewayBot(environ.get('DISCORD', ''))
-client = Client(bot, default_guild=581657201123262491, command_hooks=[Context.defer])
+client = Client(bot, command_hooks=[Context.defer])
 pattern = compile(r'\n|://')
 
 
 @client.include
-@command(name='convo')
+@command(name='convo', description='Quote any number of people.')
 @parse_annotation
 class Convo:
     count = option(int, 'How many?', default=5, min_value=2, max_value=25)
@@ -88,7 +88,7 @@ class Convo:
 
 
 @client.include
-@command(name='quote')
+@command(description='Quote a single person.')
 async def quote(ctx: Context, user: Annotated[User | None, 'Quote whom?'] = None):
     content, link = await find(ctx, '"{content}" -{username}, {date}', user)
     view = View()
