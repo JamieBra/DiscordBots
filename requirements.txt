@@ -1,3 +1,5 @@
 hikari[speedups]
 hikari-crescent
+hikari-miru
+more-itertools
 uvloop
