@@ -1,9 +1,8 @@
+import re
 from collections import Counter
-from datetime import datetime, timezone
 from inspect import Parameter, isclass, signature
 from os import environ
 from random import choice, sample, uniform
-from re import compile
 from typing import Annotated, cast, get_args
 
 import miru
@@ -11,8 +10,11 @@ import uvloop
 from async_timeout import timeout
 from crescent import (ClassCommandOption, ClassCommandProto, Client,
                       CommandCallbackT, Context, command, option)
+from crescent.ext import kebab
 from hikari import GatewayBot, Message, TextableGuildChannel, User
 from miru import Button, View
+from toolbox import format_dt, utcnow
+from toolbox.strings import LINK_REGEX
 
 
 async def find(ctx: Context, success: str, *users: User | None):
@@ -26,12 +28,12 @@ async def find(ctx: Context, success: str, *users: User | None):
 
         if isinstance(ctx.channel, TextableGuildChannel):
             counts = Counter(user and user.id for user in users if not (user and user.is_bot))
-            now = datetime.now(timezone.utc)
+            now = utcnow()
             specific_users = users[0]
 
             while counts:
                 if history := await ctx.channel.fetch_history(around=uniform(ctx.channel.created_at, now)).limit(101).filter(  # type: ignore
-                    lambda m: bool(m.content) and m.author.discriminator != '0000' and m not in messages and not pattern.search(m.content) and author(m) in counts,  # type: ignore
+                    lambda m: m.content and not (m.author.discriminator == '0000' or pattern.search(m.content) or m in messages) and author(m) in counts,  # type: ignore
                     ('author.is_bot', False),
                     mentions_everyone=False,
                     role_mention_ids=[],
@@ -42,7 +44,7 @@ async def find(ctx: Context, success: str, *users: User | None):
                     content += success.format(
                         username=message.author.username,
                         content=message.content,
-                        date=message.timestamp.date()
+                        date=format_dt(message.timestamp, 'd')
                     )
                     messages.add(message)
                     counts[author(message)] -= 1
@@ -57,10 +59,7 @@ def include_command(description: str):
     def inner(callback: CommandCallbackT | type[ClassCommandProto]):
         if isclass(callback):
             callback = cast('type[ClassCommandProto]', callback)
-            
             func = callback.callback
-            callback.callback = lambda self, ctx: func(self, ctx, *(value for name, value in ctx.options.items() if name in variadic))
-
             options = 26 - sum(isinstance(value, ClassCommandOption) for value in callback.__dict__.values())
             variadic: set[str] = set()
             for parameter in signature(func).parameters.values():
@@ -70,17 +69,18 @@ def include_command(description: str):
                         variadic.add(name)
                         setattr(callback, name, option(*get_args(parameter.annotation), default=None))
                     break
-        return client.include(command(description=description)(callback))
+            callback.callback = lambda self, ctx: func(self, ctx, *(value for name, value in ctx.options.items() if name in variadic))
+        return client.include(kebab.ify(command(description=description)(callback)))
     return inner
 
 
 bot = GatewayBot(environ.get('DISCORD', ''))
-client = Client(bot, command_hooks=[Context.defer])
-pattern = compile(r'\n|://')
+client = Client(bot, default_guild=581657201123262491, command_hooks=[Context.defer])
+pattern = re.compile(f'\n|{LINK_REGEX.pattern}')
 
 
 @include_command('Quote any number of people.')
-class convo:
+class Convo:  # pylint:disable=too-few-public-methods
     count = option(int, 'How many?', default=5, min_value=2, max_value=25)
 
     async def callback(self, ctx: Context, *users: Annotated[User, 'Quote whom?']):
