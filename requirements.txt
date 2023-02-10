@@ -1,4 +1,4 @@
+crescent-ext-kebabify
 hikari[speedups]
-hikari-crescent
 hikari-miru
 uvloop
