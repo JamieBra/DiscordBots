@@ -1,19 +1,18 @@
 from collections import Counter
 from datetime import datetime, timezone
-from inspect import Parameter, signature
+from inspect import Parameter, isclass, signature
 from os import environ
 from random import choice, sample, uniform
 from re import compile
-from typing import Annotated, get_args
+from typing import Annotated, cast, get_args
 
 import miru
 import uvloop
 from async_timeout import timeout
-from crescent import (ClassCommandOption, ClassCommandProto, Client, Context,
-                      command, option)
+from crescent import (ClassCommandOption, ClassCommandProto, Client,
+                      CommandCallbackT, Context, command, option)
 from hikari import GatewayBot, Message, TextableGuildChannel, User
 from miru import Button, View
-from more_itertools import ilen
 
 
 async def find(ctx: Context, success: str, *users: User | None):
@@ -54,21 +53,25 @@ async def find(ctx: Context, success: str, *users: User | None):
         return 'No messages found.', None
 
 
-def parse_annotation(clazz: type[ClassCommandProto]):
-    callback = clazz.callback
-    clazz.callback = lambda self, ctx: callback(self, ctx, *filter(None, map(ctx.options.get, variadic)))
+def include_command(description: str):
+    def inner(callback: CommandCallbackT | type[ClassCommandProto]):
+        if isclass(callback):
+            callback = cast('type[ClassCommandProto]', callback)
+            
+            func = callback.callback
+            callback.callback = lambda self, ctx: func(self, ctx, *(value for name, value in ctx.options.items() if name in variadic))
 
-    options = 26 - ilen(filter(ClassCommandOption.__instancecheck__, clazz.__dict__.values()))
-    variadic: list[str] = []
-    for param in signature(callback).parameters.values():
-        if param.kind is Parameter.VAR_POSITIONAL:
-            for i in range(1, options):
-                name = f'{param.name}{i}'
-                variadic.append(name)
-                setattr(clazz, name, option(*get_args(param.annotation), default=None))
-            break
-
-    return clazz
+            options = 26 - sum(isinstance(value, ClassCommandOption) for value in callback.__dict__.values())
+            variadic: set[str] = set()
+            for parameter in signature(func).parameters.values():
+                if parameter.kind is Parameter.VAR_POSITIONAL:
+                    for i in range(1, options):
+                        name = f'{parameter.name}{i}'
+                        variadic.add(name)
+                        setattr(callback, name, option(*get_args(parameter.annotation), default=None))
+                    break
+        return client.include(command(description=description)(callback))
+    return inner
 
 
 bot = GatewayBot(environ.get('DISCORD', ''))
@@ -76,19 +79,16 @@ client = Client(bot, command_hooks=[Context.defer])
 pattern = compile(r'\n|://')
 
 
-@client.include
-@command(name='convo', description='Quote any number of people.')
-@parse_annotation
-class Convo:
+@include_command('Quote any number of people.')
+class convo:
     count = option(int, 'How many?', default=5, min_value=2, max_value=25)
 
     async def callback(self, ctx: Context, *users: Annotated[User, 'Quote whom?']):
-        content, _ = await find(ctx, '{username}: {content}\n', *sample(users, len(users)) or (None,) * self.count)
+        content, _ = await find(ctx, '{username}: {content}\n', *sample(users, len(users)) or [None] * self.count)
         await ctx.respond(content)
 
 
-@client.include
-@command(description='Quote a single person.')
+@include_command('Quote a single person.')
 async def quote(ctx: Context, user: Annotated[User | None, 'Quote whom?'] = None):
     content, link = await find(ctx, '"{content}" -{username}, {date}', user)
     view = View()
