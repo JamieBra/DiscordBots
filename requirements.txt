@@ -1,4 +1,7 @@
+async-timeout
 crescent-ext-kebabify
 hikari[speedups]
+hikari-crescent
 hikari-miru
+hikari-toolbox
 uvloop
