@@ -12,6 +12,7 @@ from crescent import (ClassCommandOption, ClassCommandProto, Client,
                       CommandCallbackT, Context, command, option)
 from crescent.ext import kebab
 from hikari import GatewayBot, Message, TextableGuildChannel, User
+from hikari.impl import CacheSettings
 from miru import Button, View
 from toolbox import format_dt, utcnow
 from toolbox.strings import LINK_REGEX
@@ -74,7 +75,8 @@ def include_command(description: str):
     return inner
 
 
-bot = GatewayBot(environ.get('DISCORD', ''))
+# The 250000 messages is based on the idea that the max length of a Discord message is 2000 characters, so a cached message might take around that many bytes. This cache limit should be around half a gigabyte if that is the case.
+bot = GatewayBot(environ.get('DISCORD', ''), cache_settings=CacheSettings(max_messages=250000))
 client = Client(bot, default_guild=581657201123262491, command_hooks=[Context.defer])
 pattern = re.compile(f'\n|{LINK_REGEX.pattern}')
 
