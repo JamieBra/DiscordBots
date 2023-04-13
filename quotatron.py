@@ -82,7 +82,7 @@ pattern = re.compile(f'\n|{LINK_REGEX.pattern}')
 
 
 @include_command('Quote any number of people.')
-class Convo:  # pylint:disable=too-few-public-methods
+class Convo:
     count = option(int, 'How many?', default=5, min_value=2, max_value=25)
 
     async def callback(self, ctx: Context, *users: Annotated[User, 'Quote whom?']):
